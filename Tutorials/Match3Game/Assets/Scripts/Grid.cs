@@ -95,9 +95,17 @@ public class Grid : MonoBehaviour {
 	}
 
 	public IEnumerator Fill(){
-		while (FillStep ()) {
-			inverse = !inverse;
+		bool needsRefill = true;
+
+		while (needsRefill) {
 			yield return new WaitForSeconds (fillTime);
+
+			while (FillStep ()) {
+				inverse = !inverse;
+				yield return new WaitForSeconds (fillTime);
+			}
+
+			needsRefill = ClearAllValidMatches ();
 		}
 	}
 
@@ -225,6 +233,9 @@ public class Grid : MonoBehaviour {
 
 				piece1.MovableComponent.Move (piece2.X, piece2.Y, fillTime);
 				piece2.MovableComponent.Move (piece1X, piece1Y, fillTime);
+
+				ClearAllValidMatches ();
+				StartCoroutine (Fill ());
 			} else {
 				pieces [piece1.X, piece1.Y] = piece1;
 				pieces [piece2.X, piece2.Y] = piece2;
@@ -287,8 +298,8 @@ public class Grid : MonoBehaviour {
 			// traverse vertically if you find a match (for L and T)
 			if (horizontalPieces.Count >= 3) {
 				for (int i = 0; i < horizontalPieces.Count; i++) {
-					for (int dir = 0; dir <= 1; i++) {
-						for (int yOffset = 1; yOffset < yDim; yOffset) {
+					for (int dir = 0; dir <= 1; dir++) {
+						for (int yOffset = 1; yOffset < yDim; yOffset++) {
 							int y;
 
 							if (dir == 0) {
@@ -362,8 +373,8 @@ public class Grid : MonoBehaviour {
 			// traverse horizontally if you find a match (for L and T)
 			if (verticalPieces.Count >= 3) {
 				for (int i = 0; i < verticalPieces.Count; i++) {
-					for (int dir = 0; dir <= 1; i++) {
-						for (int xOffset = 1; xOffset < yDim; xOffset) {
+					for (int dir = 0; dir <= 1; dir++) {
+						for (int xOffset = 1; xOffset < xDim; xOffset++) {
 							int x;
 
 							if (dir == 0) { // Left
@@ -401,5 +412,57 @@ public class Grid : MonoBehaviour {
 			}
 		}
 		return null;
+	}
+
+	public bool ClearAllValidMatches() {
+		bool needRefill = false;
+
+		for (int y = 0; y < yDim; y++) {
+			for (int x = 0; x < xDim; x++) {
+				if (pieces [x, y].IsClearable ()) {
+					List<GamePiece> match = GetMatch (pieces [x, y], x, y);
+
+					if (match != null) {
+						for (int i = 0; i < match.Count; i++) {
+							if (ClearPiece (match [i].X, match [i].Y)) {
+								needRefill = true;
+							}
+						}
+					}
+				}
+			}
+		}
+		return needRefill;
+	}
+
+	public bool ClearPiece(int x, int y) {
+		if (pieces [x, y].IsClearable () && !pieces [x, y].ClearableComponent.IsBeingCleared) {
+			pieces [x, y].ClearableComponent.clear ();
+			SpawnNewPiece (x, y, PieceType.EMPTY);
+
+			ClearObstacles (x, y);
+			return true;
+		}
+		return false;
+	}
+
+	public void ClearObstacles(int x, int y){
+		for (int adjacentX = x - 1; adjacentX <= x + 1; adjacentX++) {
+			if (adjacentX != x && adjacentX >= 0 && adjacentX < xDim) {
+				if (pieces [adjacentX, y].Type == PieceType.BUBBLE && pieces [adjacentX, y].IsClearable ()) {
+					pieces [adjacentX, y].ClearableComponent.clear ();
+					SpawnNewPiece (adjacentX, y, PieceType.EMPTY);
+				}
+			}
+		}
+
+		for (int adjacentY = y - 1; adjacentY <= x + 1; adjacentY++) {
+			if (adjacentY != x && adjacentY >= 0 && adjacentY < yDim) {
+				if (pieces [x, adjacentY].Type == PieceType.BUBBLE && pieces [x, adjacentY].IsClearable ()) {
+					pieces [x, adjacentY].ClearableComponent.clear ();
+					SpawnNewPiece (x, adjacentY, PieceType.EMPTY);
+				}
+			}
+		}
 	}
 }
